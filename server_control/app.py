@@ -1,13 +1,45 @@
+import json
+import os
 from flask import Flask, render_template, request, redirect, url_for, flash, Response
 import subprocess
 import threading
 import time
+from cryptography.fernet import Fernet
 
 app = Flask(__name__)
 app.secret_key = '906dce92e75e3427ce2052e49d0a0091'
 
+# Path to the encrypted JSON file
+encrypted_file = 'servers.json.enc'
+# Generate or load the encryption key
+key_file = 'secret.key'
+
+if os.path.exists(key_file):
+    with open(key_file, 'rb') as f:
+        encryption_key = f.read()
+else:
+    encryption_key = Fernet.generate_key()
+    with open(key_file, 'wb') as f:
+        f.write(encryption_key)
+
+cipher = Fernet(encryption_key)
+
 # In-memory database for servers
 servers = []
+
+def load_servers():
+    if os.path.exists(encrypted_file):
+        with open(encrypted_file, 'rb') as f:
+            encrypted_data = f.read()
+            decrypted_data = cipher.decrypt(encrypted_data)
+            global servers
+            servers = json.loads(decrypted_data.decode('utf-8'))
+
+def save_servers():
+    with open(encrypted_file, 'wb') as f:
+        json_data = json.dumps(servers).encode('utf-8')
+        encrypted_data = cipher.encrypt(json_data)
+        f.write(encrypted_data)
 
 def fetch_sensor_data(server_id):
     server = servers[server_id]
@@ -42,8 +74,6 @@ def generate_sensor_data():
             yield f"data: {{\"server_id\": {idx}, \"data\": \"{escaped_data}\"}}\n\n"
             time.sleep(10)
 
-
-
 @app.route('/')
 def index():
     return render_template('index.html', servers=servers)
@@ -65,6 +95,7 @@ def add_server():
         'sensor_data': ''
     }
     servers.append(server)
+    save_servers()
     flash(f'Server {name} added successfully!')
     return redirect(url_for('index'))
 
@@ -101,5 +132,11 @@ def control(server_id, action):
 def events():
     return Response(generate_sensor_data(), content_type='text/event-stream')
 
+@app.route('/fetch_sensor_data/<int:server_id>')
+def fetch_sensor_data_route(server_id):
+    data = fetch_sensor_data(server_id)
+    return {'sensor_data': data}
+
 if __name__ == '__main__':
+    load_servers()  # Load server data when the application starts
     app.run(debug=True)

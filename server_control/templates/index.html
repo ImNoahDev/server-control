@@ -5,115 +5,190 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Server Control</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+
+        .fixed-button {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        .loading {
+            background-color: #4B5563; 
+            cursor: not-allowed;
+        }
+
+        .server-title {
+            text-align: center;
+            font-weight: bold;
+        }
+    </style>
 </head>
-<body class="bg-gray-100 p-8">
+<body class="bg-gray-900 text-gray-100 p-8">
     <div class="container mx-auto">
         <h1 class="text-2xl font-bold mb-4">Server Control</h1>
 
-        <!-- Add Server Form -->
-        <form action="{{ url_for('add_server') }}" method="POST" class="mb-4">
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <input name="name" placeholder="Server Name" class="p-2 border rounded">
-                <select name="method" class="p-2 border rounded">
-                    <option value="ipmi">IPMI</option>
-                    <option value="snmp">SNMP</option>
-                    <option value="redfish">Redfish</option>
-                </select>
-                <input name="ip" placeholder="IP Address" class="p-2 border rounded">
-                <input name="username" placeholder="Username" class="p-2 border rounded">
-                <input name="password" placeholder="Password" type="password" class="p-2 border rounded">
-                <button type="submit" class="bg-blue-500 text-white p-2 rounded">Add Server</button>
-            </div>
-        </form>
 
-        <!-- Server List -->
+        <div id="addServerModal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center hidden">
+            <div class="bg-gray-900 p-6 rounded-lg shadow-lg w-full max-w-lg">
+                <h2 class="text-xl font-bold mb-4">Add Server</h2>
+                <form action="{{ url_for('add_server') }}" method="POST">
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                        <input name="name" placeholder="Server Name" class="p-2 border rounded bg-gray-700 text-gray-300" required>
+                        <select name="method" class="p-2 border rounded bg-gray-700 text-gray-300" required>
+                            <option value="ipmi">IPMI</option>
+                            <option value="snmp">SNMP</option>
+                            <option value="redfish">Redfish</option>
+                        </select>
+                        <input name="ip" placeholder="IP Address" class="p-2 border rounded bg-gray-700 text-gray-300" required>
+                        <input name="username" placeholder="Username" class="p-2 border rounded bg-gray-700 text-gray-300">
+                        <input name="password" placeholder="Password" type="password" class="p-2 border rounded bg-gray-700 text-gray-300">
+                        <button type="submit" class="bg-blue-600 text-white p-2 rounded hover:bg-blue-700">Add Server</button>
+                    </div>
+                </form>
+                <button onclick="closeModal()" class="mt-4 bg-red-600 text-white p-2 rounded hover:bg-red-700">Close</button>
+            </div>
+        </div>
+
+
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
             {% for server in servers %}
-                <div class="bg-white p-4 rounded shadow-md">
-                    <h2 class="text-xl font-semibold">{{ server.name }}</h2>
+                <div class="bg-gray-800 p-4 rounded-lg shadow-md">
+                    <h2 class="server-title">{{ server.name }}</h2>
                     <p><strong>Method:</strong> {{ server.method }}</p>
                     <p><strong>IP:</strong> {{ server.ip }}</p>
                     <div id="sensor-data-{{ loop.index0 }}" class="mt-2">
                         <p><strong>Sensor Data:</strong></p>
-                        <p class="bg-gray-100 p-2 rounded text-sm">Loading...</p>
+                        <p class="bg-gray-700 p-2 rounded text-sm">Loading...</p>
                     </div>
 
-                    <!-- Control Buttons -->
-                    <form action="{{ url_for('control', server_id=loop.index0, action='power_on') }}" method="POST" class="mt-2">
-                        <button class="bg-green-500 text-white p-2 rounded">Power On</button>
-                    </form>
-                    <form action="{{ url_for('control', server_id=loop.index0, action='power_off') }}" method="POST" class="mt-2">
-                        <button class="bg-red-500 text-white p-2 rounded">Power Off</button>
-                    </form>
-                    <form action="{{ url_for('control', server_id=loop.index0, action='reset') }}" method="POST" class="mt-2">
-                        <button class="bg-yellow-500 text-white p-2 rounded">Reset</button>
-                    </form>
+
+                    <div class="mt-4 grid grid-cols-3 gap-2">
+                        <form action="{{ url_for('control', server_id=loop.index0, action='power_on') }}" method="POST">
+                            <button class="bg-green-600 text-white p-2 rounded hover:bg-green-700">Power On</button>
+                        </form>
+                        <form action="{{ url_for('control', server_id=loop.index0, action='power_off') }}" method="POST">
+                            <button class="bg-red-600 text-white p-2 rounded hover:bg-red-700">Power Off</button>
+                        </form>
+                        <form action="{{ url_for('control', server_id=loop.index0, action='reset') }}" method="POST">
+                            <button class="bg-yellow-600 text-white p-2 rounded hover:bg-yellow-700">Reset</button>
+                        </form>
+                    </div>
                 </div>
             {% endfor %}
         </div>
     </div>
 
-    <!-- SSE Client-Side Script -->
+
+    <div class="fixed-button">
+        <button onclick="openModal()" class="bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700">+</button>
+    </div>
+
     <script>
-function setupSSE() {
-    const evtSource = new EventSource('/events');
 
-    evtSource.onmessage = function(event) {
-        const data = event.data;
-        console.log('Received data:', data);  // Log the raw data received
-
-        try {
-            // Parse the data as JSON
-            const parsedData = JSON.parse(data);
-            console.log('Parsed data:', parsedData);  // Log the parsed JSON data
-
-
-            updateSensorData(parsedData.server_id, parsedData.data);
-        } catch (error) {
-            console.error('Error parsing data:', error);
+        async function fetchInitialSensorData(serverCount) {
+            
+            const fetchPromises = Array.from({ length: serverCount }, (_, i) =>
+                fetch(`/fetch_sensor_data/${i}`).then(response => response.json())
+            );
+        
+            try {
+                
+                const results = await Promise.all(fetchPromises);
+        
+         
+                results.forEach((data, index) => {
+                    updateSensorData(index, data.sensor_data);
+                });
+            } catch (error) {
+                console.error('Error fetching sensor data:', error);
+            }
         }
-    };
+        
+ 
+        function updateSensorData(serverId, data) {
+            const sensorDataDiv = document.getElementById('sensor-data-' + serverId);
+        
+            if (sensorDataDiv) {
+                // Split the data by lines, filter out lines containing 'ns'
+                const lines = data.split('\n');
+                const filteredLines = lines.filter(line => !line.includes('ns'));
+        
+                let tableHTML = `<table border="1" class="w-full border-collapse bg-gray-800 text-white">
+                                    <tr>
+                                        <th class="p-2 text-left">Sensor</th>
+                                        <th class="p-2 text-center">Status</th>
+                                        <th class="p-2 text-right">Condition</th>
+                                    </tr>`;
+        
+                let hiddenRowsHTML = '';
+                filteredLines.forEach(line => {
+                    const columns = line.split('|').map(col => col.trim());
+                    const sensorName = columns[0];
+        
+                   
+                    if (sensorName.includes('Fan') || sensorName.includes('Temp')) {
+                        tableHTML += `<tr>
+                                        <td class="p-2">${columns[0]}</td>
+                                        <td class="p-2 text-center">${columns[1]}</td>
+                                        <td class="p-2 text-right">${columns[2]}</td>
+                                      </tr>`;
+                    } else {
+                        hiddenRowsHTML += `<tr class="hidden-row" style="display:none;">
+                                            <td class="p-2">${columns[0]}</td>
+                                            <td class="p-2 text-center">${columns[1]}</td>
+                                            <td class="p-2 text-right">${columns[2]}</td>
+                                           </tr>`;
+                    }
+                });
+        
+                tableHTML += hiddenRowsHTML;
+                tableHTML += `</table>
+                              <div class="flex justify-center mt-2">
+                                  <button id="expand-button" onclick="toggleRows()" class="p-2 rounded ${hiddenRowsHTML ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-600'}">Show More</button>
+                              </div>`;
+        
+     
+                sensorDataDiv.innerHTML = `<p><strong>Sensor Data:</strong></p>${tableHTML}`;
+            } else {
+                console.error('Element with ID sensor-data-' + serverId + ' not found.');
+            }
+        }
+        
 
-    evtSource.onerror = function(err) {
-        console.error('EventSource failed:', err);
-    };
-}
+        function toggleRows() {
+            const hiddenRows = document.querySelectorAll('.hidden-row');
+            const expandButton = document.getElementById('expand-button');
+            hiddenRows.forEach(row => {
+                if (row.style.display === 'none') {
+                    row.style.display = '';
+                    expandButton.textContent = 'Show Less';
+                } else {
+                    row.style.display = 'none';
+                    expandButton.textContent = 'Show More';
+                }
+            });
+        }
+        
 
+        function openModal() {
+            document.getElementById('addServerModal').classList.remove('hidden');
+        }
+        
 
-function updateSensorData(serverId, data) {
-    const sensorDataDiv = document.getElementById('sensor-data-' + serverId);
+        function closeModal() {
+            document.getElementById('addServerModal').classList.add('hidden');
+        }
+        
 
-    if (sensorDataDiv) {
-        // Split the data by lines, filter out lines containing 'ns'
-        const lines = data.split('\n');
-        const filteredLines = lines.filter(line => !line.includes('ns'));
-
-
-        let tableHTML = `<table border="1" style="width: 100%; border-collapse: collapse;">
-                            <tr>
-                                <th>Sensor</th>
-                                <th style="text-align: center;">Status</th>
-                                <th style="text-align: right;">Condition</th>
-                            </tr>`;
-        filteredLines.forEach(line => {
-            const columns = line.split('|').map(col => col.trim());
-            tableHTML += `<tr>
-                            <td>${columns[0]}</td>
-                            <td style="text-align: center;">${columns[1]}</td>
-                            <td style="text-align: right;">${columns[2]}</td>
-                          </tr>`;
-        });
-        tableHTML += `</table>`;
-
-        sensorDataDiv.innerHTML = `<p><strong>Sensor Data:</strong></p>${tableHTML}`;
-    } else {
-        console.error('Element with ID sensor-data-' + serverId + ' not found.');
-    }
-}
-
-
-window.onload = setupSSE;
-
-    </script>
+        window.onload = function() {
+            const serverCount = {{ servers|length }};
+            fetchInitialSensorData(serverCount)
+                .then(() => setupSSE()); 
+        };
+        </script>
+        
+    
 </body>
 </html>
