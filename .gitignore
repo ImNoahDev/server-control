@@ -1,1 +1,3 @@
 venv
+secret.key
+servers.json.enc
